@@ -1,18 +1,10 @@
-#include <stdio.h>
-#include <stdlib.h>
-
-
-extern void MyPrintf();
+extern void my_printf(const char* fmt, ...);
 
 
 int main(void) {
-    printf("\n>>> main(): start\n\n");
+    long long a = 10;
 
-    int a = 85, b = 14;
-
-    MyPrintf();
-
-    printf("\n<<< main(): end\n\n");
+    my_printf("Aboba %c %x %d %o %s %% %b\n", '!', (long long)0xABCDEF, (long long)-10, (long long)0xA, "real!?", (long long)0xA);
 
     return 0;
 }
