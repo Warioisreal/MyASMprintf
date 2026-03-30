@@ -1,5 +1,6 @@
 all: assembly link
 	./printf
+	@rm -rf printf.o
 
 link:
 	clang-14 -O0 main.c printf.o -o printf

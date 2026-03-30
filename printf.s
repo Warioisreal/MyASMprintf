@@ -190,17 +190,17 @@ my_printf:
         call print_char
         jmp .next_arg
 .handle_b:
-        mov rax, [rbp + DEF_OFS + rbx]
+        mov eax, dword [rbp + DEF_OFS + rbx]
         mov r12, 2
         call print_num
         jmp .next_arg
 .handle_o:
-        mov rax, [rbp + DEF_OFS + rbx]
+        mov eax, dword [rbp + DEF_OFS + rbx]
         mov r12, 8
         call print_num
         jmp .next_arg
 .handle_d:
-        mov rax, [rbp + DEF_OFS + rbx]
+        movsxd rax, dword [rbp + DEF_OFS + rbx]
         mov r12, 10
 
         cmp rax, 0
@@ -216,7 +216,7 @@ my_printf:
         call print_num
         jmp .next_arg
 .handle_x:
-        mov rax, [rbp + DEF_OFS + rbx]
+        mov eax, dword [rbp + DEF_OFS + rbx]
         mov r12, 16
         call print_num
         jmp .next_arg
