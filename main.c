@@ -9,7 +9,10 @@ int main(void) {
 
     printf("----------------------------------------\n");
 
-    my_printf("Aboba %c %x %d %o %s %% %b\n", '!', 0xABCDEF, -10, (int)a, "real!?", 0xA);
+    my_printf("%d %s %x %d%%%c\n"
+                "Aboba %x %d %o %b\n",
+                -1, "love", 3802, 100, 33,
+                0xAA, 0xAA, 0xAA, 0xAA);
 
     printf("----------------------------------------\n");
 

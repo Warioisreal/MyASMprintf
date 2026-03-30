@@ -5,12 +5,13 @@ section .bss
         char_buf        resb 1
         num_buffer      resb 64
         num_buffer_end:
+        ret_addr        resb 8
 
 ;=========================================================
 
 section .rodata
         addr_prefix     db "0x", 0
-        hex_chars       db "0123456789ABCDEF"
+        hex_chars       db "0123456789abcdef"
         DEF_OFS         equ 40
         align 8
 jump_table:
@@ -249,7 +250,8 @@ my_printf:
         pop r12
         pop rbx
         pop rbp         ; restore RBP
-        pop r11         ; save ret addr
+
+        pop qword [rel ret_addr]        ; save ret addr
 
         mov rdi, [rsp]
         mov rsi, [rsp + 8]
@@ -259,12 +261,12 @@ my_printf:
         mov r9,  [rsp + 40]
 
         ; clear stack
-        add rsp, 48     ; only my 6 arg from trampoline
-        push r11        ; back ret addr
+        add rsp, 48                     ; only my 6 arg from trampoline
 
         xor rax, rax
         call printf wrt ..plt
 
+        push qword [rel ret_addr]       ; back ret addr
         ret
 
 ;=========================================================
