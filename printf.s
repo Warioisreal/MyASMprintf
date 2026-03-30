@@ -6,13 +6,14 @@ section .bss
         num_buffer      resb 64
         num_buffer_end:
         ret_addr        resb 8
+        general_buffer  resb G_BUF_CAP
 
 ;=========================================================
-
 section .rodata
         addr_prefix     db "0x", 0
         hex_chars       db "0123456789abcdef"
         DEF_OFS         equ 40
+        G_BUF_CAP       equ 256
         align 8
 jump_table:
         %assign i 0
@@ -44,6 +45,82 @@ section .text
 extern printf
 global my_printf
 
+
+flash_buf:
+        push rcx
+        cmp rdx, 0
+        jle .done
+
+        push rsi
+
+        mov rax, 0x01
+        mov rdi, 1
+        lea rsi, [rel general_buffer]
+        syscall
+
+        pop rsi
+.done:
+
+        pop rcx
+
+        xor rdx, rdx
+        ret
+
+;---------------------------------------------------------
+
+;---------------------------------------------------------
+print_to_buf:
+        cmp rcx, 0
+        jle .done
+
+        cmp rcx, G_BUF_CAP
+        jb .medium_data         ; if (RCX < G_BUF_CAP) goto medium_data_zone
+
+        call flash_buf          ; RDX = 0 (free)
+.loop:
+        mov rdx, rcx            ; save RCX to free RDX
+
+        cld
+        lea rdi, [rel general_buffer]
+        mov rcx, G_BUF_CAP
+        shr rcx, 3
+        rep movsq
+
+        mov rcx, rdx            ; restore RCX, RDX = trash (free)
+
+        mov rdx, G_BUF_CAP      ; RDX = 256 (full buffer)
+        sub rcx, G_BUF_CAP      ; RCX = RCX - 256
+
+        call flash_buf          ; RDX = 0 (free)
+
+        cmp rcx, G_BUF_CAP
+        jae .loop               ; while (RCX >= G_BUF_CAP) goto loop
+
+
+.medium_data:
+        mov r13, G_BUF_CAP
+        sub r13, rdx
+
+        cmp rcx, r13
+        jbe .small_data         ; if (RCX <= G_BUF_CAP - RDX) goto small_data_zone
+
+        call flash_buf
+
+
+.small_data:
+        mov r13, rdx
+        add r13, rcx
+
+        cld
+        lea rdi, [rel general_buffer]
+        add rdi, rdx
+        ; RCX = msg last bite count
+        rep movsb
+
+        mov rdx, r13
+.done:
+        ret
+
 ;---------------------------------------------------------
 ; Функция:              print_char
 ; Назначение:           Выводит один ASCII-символ в stdout
@@ -55,14 +132,13 @@ global my_printf
 print_char:
         push rsi
 
-        lea r11, [char_buf]
+        lea r11, [rel char_buf]
         mov [r11], al
 
-        mov rax, 0x01
-        mov rdi, 1
-        lea rsi, [char_buf]
-        mov rdx, 1          ; msg len
-        syscall
+        lea rsi, [rel char_buf]
+        mov rcx, 1
+
+        call print_to_buf
 
         pop rsi
         ret
@@ -70,25 +146,26 @@ print_char:
 ;---------------------------------------------------------
 ; Функция:              print_num
 ; Назначение:           Преобразует 64-битное целое без знака в строку и выводит её
-; Состояние системы:    R12 содержит корректное основание (2-16), num_buffer доступен
+; Состояние системы:    R12 содержит корректное основание, num_buffer доступен
 ; Вход:                 RAX = Число для печати, R12 = Основание системы счисления
-; Сохранённые регистры: RSI
-; Испорченные регистры: RAX, RDX, RDI, R11
+; Сохранённые регистры: RSI, RDX, R12
+; Испорченные регистры: RAX, RCX, RDI, R11
 ;---------------------------------------------------------
 print_num:
         push rsi
+        push rdx
 
-        lea rsi, [num_buffer_end - 1]
+        lea rsi, [rel num_buffer_end - 1]
 
+        lea r11, [rel hex_chars]
 .convert_loop:
         xor rdx, rdx
         div r12                     ; rax = rax / r12, rdx = rax % r12
 
-        push rax
-        lea r11, [hex_chars]
+        mov rdi, rax
         mov al, [r11 + rdx]
         mov [rsi], al
-        pop rax
+        mov rax, rdi
 
         dec rsi
         cmp rax, 0
@@ -97,14 +174,59 @@ print_num:
         inc rsi         ; rsi -> first digit in num_buffer
 
 .print:
-        mov rax, 0x01
-        mov rdi, 1
-        lea rdx, [num_buffer_end]
-        sub rdx, rsi
-        syscall
+        lea rcx, [rel num_buffer_end]
+        sub rcx, rsi
+
+        pop rdx
+        call print_to_buf
 
         pop rsi
         ret
+
+;---------------------------------------------------------
+; Функция:              print_num_pow2
+; Назначение:           Быстрый вывод для систем счисления 2, 8, 16, ... (степени 2)
+; Состояние системы:    R12 содержит корректное основание, num_buffer доступен
+; Вход:                 RAX = Число для печати, R12 = Основание системы счисления
+; Сохранённые регистры: RSI, RDX
+; Испорченные регистры: RAX, RCX, RDI, R11, R12
+;---------------------------------------------------------
+print_num_pow2:
+        push rsi
+        push rdx
+
+        lea rsi, [rel num_buffer_end - 1]
+
+        bsf rcx, r12            ; RCX = deg of 2
+        dec r12                 ; R12 = 2^cs - 1 (bit mask)
+
+        lea r11, [rel hex_chars]
+
+.convert_loop:
+        mov rdx, rax
+        and rdx, r12
+
+        mov dl, [r11 + rdx]     ; get symbol
+        mov [rsi], dl
+
+        shr rax, cl
+        dec rsi
+
+        cmp rax, 0
+        jne .convert_loop
+
+        inc rsi
+
+.print:
+        lea rcx, [rel num_buffer_end]
+        sub rcx, rsi
+
+        pop rdx
+        call print_to_buf
+
+        pop rsi
+        ret
+
 
 ;---------------------------------------------------------
 ; Функция:              print_string
@@ -120,21 +242,15 @@ print_string:
         mov rdi, rax
         mov rsi, rax
 
-        xor rdx, rdx
+        xor rcx, rcx
 .len_loop:
-        cmp byte [rdi + rdx], 0
-        je .do_print
-        inc rdx
+        cmp byte [rdi + rcx], 0
+        je .print
+
+        inc rcx
         jmp .len_loop
-.do_print:
-        cmp rdx, 0
-        je .done
-
-        mov rax, 0x01
-        mov rdi, 1
-        syscall
-
-.done:
+.print:
+        call print_to_buf
 
         pop rsi
         ret
@@ -162,6 +278,7 @@ my_printf:
 
         mov rsi, rdi    ; rsi = fmt
         xor rbx, rbx    ; rbx = 0 (0, 8, 16...)
+        xor rdx, rdx
 
 .loop:
         mov al, [rsi]       ; take fmt symbol
@@ -184,6 +301,9 @@ my_printf:
         lea r11, [rel jump_table]
         movsxd rax, dword [r11 + rax * 4]
         add rax, r11
+
+        lea r11, [rel general_buffer]
+        add r11, rcx
         jmp rax
 
 .handle_c:
@@ -193,12 +313,12 @@ my_printf:
 .handle_b:
         mov eax, dword [rbp + DEF_OFS + rbx]
         mov r12, 2
-        call print_num
+        call print_num_pow2
         jmp .next_arg
 .handle_o:
         mov eax, dword [rbp + DEF_OFS + rbx]
         mov r12, 8
-        call print_num
+        call print_num_pow2
         jmp .next_arg
 .handle_d:
         movsxd rax, dword [rbp + DEF_OFS + rbx]
@@ -219,7 +339,7 @@ my_printf:
 .handle_x:
         mov eax, dword [rbp + DEF_OFS + rbx]
         mov r12, 16
-        call print_num
+        call print_num_pow2
         jmp .next_arg
 
 .handle_s:
@@ -242,6 +362,7 @@ my_printf:
         jmp .loop
 
 .done:
+        call flash_buf
         ; ...
         ; [rbp + 24] -> arg0
         ; [rbp + 16] -> fmt
