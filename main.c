@@ -7,9 +7,9 @@ extern void my_printf(const char* fmt, ...) __attribute__((format(printf, 1, 2))
 int main(void) {
     char string[600] = {0};
 
-    for (int i = 0; i < 600; i++) {
+    for (int i = 0; i < 300; i++) {
         string[i] = '0' + i / 10;
-    } string[598] = '\n'; string[599] = 0;
+    } string[298] = '\n'; string[299] = 0;
 
     printf("\n----------------------------------------\n\n");
 
@@ -20,8 +20,8 @@ int main(void) {
 
     printf("\n----------------------------------------\n\n");
 
-    my_printf("1) %s"
-                "2) %s\n", string, string);
+    my_printf("%s"
+                "%s\n", string, string);
     printf("\n----------------------------------------\n\n");
 
     return 0;
